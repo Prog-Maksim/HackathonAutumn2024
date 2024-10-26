@@ -1,0 +1,6 @@
+﻿services:
+  xakaton2024:
+    image: xakaton2024
+    build:
+      context: .
+      dockerfile: Xakaton2024/Dockerfile
