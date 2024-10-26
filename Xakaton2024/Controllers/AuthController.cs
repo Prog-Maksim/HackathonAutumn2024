@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿using System.Text.Json;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -13,7 +14,7 @@ namespace Xakaton2024.Controllers;
 public class AuthController(ApplicationContext context, IConnectionMultiplexer redis): ControllerBase
 {
     private readonly PasswordHasher<Person> _passwordHasher = new();
-    // private static List<Person> Users = new();
+    private static List<Person> Users = new();
     
     private static readonly HttpClient client = new ();
 
@@ -82,8 +83,7 @@ public class AuthController(ApplicationContext context, IConnectionMultiplexer r
         };
         person.Password = _passwordHasher.HashPassword(person, password);
         
-        await context.Users.AddAsync(person);
-        await context.SaveChangesAsync();
+        Users.Add(person);
 
         return await SendNewConfirmationCode(person.PersonId);
     }
@@ -108,11 +108,16 @@ public class AuthController(ApplicationContext context, IConnectionMultiplexer r
 
         if (result == code)
         {
-            Person person = await context.Users.FirstOrDefaultAsync(u => u.PersonId == user)!;
+            Person person = Users.FirstOrDefault(u => u.PersonId == user)!;
             
             string adress = await DeterminingIPAddress.GetPositionUser(userIpAddress);
             string message = $"Вход с нового устройства: {person.Name} мы обнаружили вход в Ваш аккаунт с нового устройства в {DateTime.Now} \n\nУстройство: {HttpContext.Request.Headers["User-Agent"]}, {adress} - {userIpAddress}";
             await SendMessage(person.Email, message);
+
+            await context.Users.AddAsync(person);
+            await context.SaveChangesAsync();
+
+            Users.Remove(person);
             
             await DeleteConfirmationCodeAsync(user);
             return Ok(TokenService.GenerateToken(person.PersonId, person.PasswordVersion));
@@ -131,18 +136,26 @@ public class AuthController(ApplicationContext context, IConnectionMultiplexer r
     public async Task<IActionResult> SendNewConfirmationCode(string user)
     {
         if (TimeEmailMailing.ContainsKey(user))
-            if ((DateTime.Now - TimeEmailMailing[user]).TotalSeconds < 120)
+        {
+            var time = (DateTime.Now - TimeEmailMailing[user]).TotalSeconds;
+            if (time < 120)
             {
-                var problem = new ProblemDetails {
+                var problem = new ProblemDetails
+                {
                     Status = 403,
                     Title = "Forbidden",
                     Detail = "вы слишком часто отправляете код подтверждения"
                 };
 
-                return Problem(problem.Detail, null, problem.Status, problem.Title);
+                problem.Extensions["Time"] = time;
+
+                return Problem(problem.Detail, null, problem.Status, problem.Title, JsonSerializer.Serialize(problem.Extensions));
             }
-        
-        var person = await context.Users.FirstOrDefaultAsync(u => u.PersonId == user);
+        }
+
+        var person = Users.FirstOrDefault(u => u.PersonId == user);
+        if (person == null)
+            person = await context.Users.FirstOrDefaultAsync(u => u.PersonId == user);
         await DeleteConfirmationCodeAsync(user);
 
         if (person != null)
@@ -225,6 +238,26 @@ public class AuthController(ApplicationContext context, IConnectionMultiplexer r
         TokenService.RevokeJwtToken(token);
         
         return Ok(TokenService.GenerateToken(user.PersonId, user.PasswordVersion));
+    }
+
+    [Authorize]
+    [HttpGet("profile")]
+    public async Task<IActionResult> GetProfileData()
+    {
+        var token = HttpContext.Request.Headers["Authorization"].ToString().Replace("Bearer ", "");
+        var data = TokenService.GetJwtTokenData(token);
+
+        if (data.TokenType == "refresh")
+            return Unauthorized();
+        
+        var person = await context.Users.FirstOrDefaultAsync(u => u.PersonId == data.UserId);
+
+        return Ok(new
+        {
+            User = person.Name,
+            Email = person.Email,
+            Order = "None"
+        });
     }
 }
 
