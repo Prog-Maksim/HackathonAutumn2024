@@ -61,7 +61,7 @@ public class AuthController(ApplicationContext context, IConnectionMultiplexer r
     
     
     [HttpPost("registration/user")]
-    public async Task<IActionResult> RegistrationUser(string name, string email, string password)
+    public async Task<IActionResult> RegistrationUser([FromQuery] string name, [FromQuery] string email, [FromQuery] string password)
     {
         if (await context.Users.FirstOrDefaultAsync(u => u.Email == email) != null)
         {
@@ -89,7 +89,7 @@ public class AuthController(ApplicationContext context, IConnectionMultiplexer r
     }
 
     [HttpPost("confirmation-code/user")]
-    public async Task<IActionResult> CheckConfirmationCode(string user, string code)
+    public async Task<IActionResult> CheckConfirmationCode([FromQuery] string user, [FromQuery] string code)
     {
         var userIpAddress = HttpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault() ?? HttpContext.Connection.RemoteIpAddress?.ToString();
 
@@ -142,7 +142,7 @@ public class AuthController(ApplicationContext context, IConnectionMultiplexer r
     }
 
     [HttpPost("new-confirmation-code/send")]
-    public async Task<IActionResult> SendNewConfirmationCode(string user)
+    public async Task<IActionResult> SendNewConfirmationCode([FromQuery] string user)
     {
         if (TimeEmailMailing.ContainsKey(user))
         {
@@ -184,7 +184,7 @@ public class AuthController(ApplicationContext context, IConnectionMultiplexer r
     }
 
     [HttpPost("authorization/user")]
-    public async Task<IActionResult> AuthorizationUser(string email, string password)
+    public async Task<IActionResult> AuthorizationUser([FromQuery] string email, [FromQuery] string password)
     {
         var person = await context.Users.FirstOrDefaultAsync(u => u.Email == email);
 
