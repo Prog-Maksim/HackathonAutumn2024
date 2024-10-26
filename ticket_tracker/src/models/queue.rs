@@ -24,10 +24,7 @@ impl Queue {
     }
 
     pub fn get_keys(&self) -> Vec<TakePlace> {
-        self.queue
-            .iter()
-            .map(|entry| entry.key().clone())
-            .collect()
+        self.queue.iter().map(|entry| entry.key().clone()).collect()
     }
 
     pub fn process_reservations(&self, mut train: Train, place: TakePlace) {

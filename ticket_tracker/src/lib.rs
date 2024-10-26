@@ -2,7 +2,7 @@ mod api_response;
 mod handlers;
 mod models;
 
-use crate::handlers::utils::{hello_word, handler_404};
+use crate::handlers::utils::{handler_404, hello_word};
 use crate::models::queue::Queue;
 use axum::{routing, Router};
 use handlers::queue;
