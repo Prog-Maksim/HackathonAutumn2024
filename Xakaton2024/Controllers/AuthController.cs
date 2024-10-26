@@ -108,16 +108,25 @@ public class AuthController(ApplicationContext context, IConnectionMultiplexer r
 
         if (result == code)
         {
-            Person person = Users.FirstOrDefault(u => u.PersonId == user)!;
+            Person person = context.Users.FirstOrDefault(u => u.PersonId == user)!;
             
             string adress = await DeterminingIPAddress.GetPositionUser(userIpAddress);
-            string message = $"Вход с нового устройства: {person.Name} мы обнаружили вход в Ваш аккаунт с нового устройства в {DateTime.Now} \n\nУстройство: {HttpContext.Request.Headers["User-Agent"]}, {adress} - {userIpAddress}";
+            string message = $"Вход с нового устройства: мы обнаружили вход в Ваш аккаунт с нового устройства в {DateTime.Now} \n\nУстройство: {HttpContext.Request.Headers["User-Agent"]}, {adress} - {userIpAddress}";
             await SendMessage(person.Email, message);
 
-            await context.Users.AddAsync(person);
-            await context.SaveChangesAsync();
-
-            Users.Remove(person);
+            try
+            {
+                await context.Users.AddAsync(person);
+                await context.SaveChangesAsync();
+            }
+            catch
+            {
+                
+            }
+            finally
+            {
+                Users.Remove(person);
+            }
             
             await DeleteConfirmationCodeAsync(user);
             return Ok(TokenService.GenerateToken(person.PersonId, person.PasswordVersion));
@@ -163,6 +172,8 @@ public class AuthController(ApplicationContext context, IConnectionMultiplexer r
             Random rnd = new Random();
             string code = rnd.Next(111111, 999999).ToString();
             await StoreConfirmationCodeAsync(user, code);
+            
+            Console.WriteLine($"Почта: {person.Email} код: {code}");
 
             await SendMessage(person.Email, $"Ваш код подтверждения: {code} \n\nКод действителен в течении 5 минут");
         }
@@ -177,6 +188,7 @@ public class AuthController(ApplicationContext context, IConnectionMultiplexer r
     {
         var person = await context.Users.FirstOrDefaultAsync(u => u.Email == email);
 
+        
         if (person == null || _passwordHasher.VerifyHashedPassword(person, person.Password, password) != PasswordVerificationResult.Success)
         {
             var problem = new ProblemDetails {
